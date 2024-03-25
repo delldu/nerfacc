@@ -112,8 +112,7 @@ class DenseLayer(MLP):
 
 
 class NerfMLP(nn.Module):
-    def __init__(
-        self,
+    def __init__(self,
         input_dim: int,  # The number of input tensor channels.
         condition_dim: int,  # The number of condition tensor channels.
         net_depth: int = 8,  # The depth of the MLP.

@@ -23,6 +23,8 @@ from nerfacc.volrend import (
     render_weight_from_density,
     rendering,
 )
+import todos
+import pdb
 
 NERF_SYNTHETIC_SCENES = [
     "chair",
@@ -53,8 +55,8 @@ def set_random_seed(seed):
 
 def render_image_with_occgrid(
     # scene
-    radiance_field: torch.nn.Module,
-    estimator: OccGridEstimator,
+    radiance_field: torch.nn.Module, # NGPRadianceField()
+    estimator: OccGridEstimator, # OccGridEstimator()
     rays: Rays,
     # rendering options
     near_plane: float = 0.0,
@@ -69,8 +71,14 @@ def render_image_with_occgrid(
     timestamps: Optional[torch.Tensor] = None,
 ):
     """Render the pixels of an image."""
-    rays_shape = rays.origins.shape
-    if len(rays_shape) == 3:
+    # rays is tuple: len = 2
+    #     tensor [item] size: [1024, 3], min: -3.939868, max: 4.030528, mean: 0.643094
+    #     tensor [item] size: [1024, 3], min: -0.999418, max: 0.99991, mean: -0.15511
+    # render_step_size = 0.005
+    # render_bkgd = tensor([1., 1., 1.], device='cuda:0')
+
+    rays_shape = rays.origins.shape # [1024, 3]
+    if len(rays_shape) == 3: # False
         height, width, _ = rays_shape
         num_rays = height * width
         rays = namedtuple_map(
@@ -100,7 +108,7 @@ def render_image_with_occgrid(
                 positions = (
                     t_origins + t_dirs * (t_starts + t_ends)[:, None] / 2.0
                 )
-                if timestamps is not None:
+                if timestamps is not None: # False
                     # dnerf
                     t = (
                         timestamps[ray_indices]
@@ -122,7 +130,7 @@ def render_image_with_occgrid(
                 positions = (
                     t_origins + t_dirs * (t_starts + t_ends)[:, None] / 2.0
                 )
-                if timestamps is not None:
+                if timestamps is not None: # False
                     # dnerf
                     t = (
                         timestamps[ray_indices]
@@ -151,7 +159,7 @@ def render_image_with_occgrid(
             ray_indices,
             n_rays=rays_o.shape[0],
             rgb_sigma_fn=rgb_sigma_fn,
-            render_bkgd=render_bkgd,
+            render_bkgd=render_bkgd, # ensor([1., 1., 1.], device='cuda:0')
         )
         chunk_results = [rgb, opacity, depth, len(t_starts)]
         results.append(chunk_results)
@@ -159,11 +167,17 @@ def render_image_with_occgrid(
         torch.cat(r, dim=0) if isinstance(r[0], torch.Tensor) else r
         for r in zip(*results)
     ]
+    # tensor [colors] size: [1024, 3], min: 0.722296, max: 1.0, mean: 0.829384
+    # tensor [opacities] size: [1024, 1], min: 0.0, max: 0.590225, mean: 0.39022
+    # tensor [depths] size: [1024, 1], min: 0.0, max: 5.134532, mean: 3.758945
+    # n_rendering_samples is tuple: len = 1
+    #     [item] value: '280255'
+
     return (
         colors.view((*rays_shape[:-1], -1)),
         opacities.view((*rays_shape[:-1], -1)),
         depths.view((*rays_shape[:-1], -1)),
-        sum(n_rendering_samples),
+        sum(n_rendering_samples), # 280255
     )
 
 
@@ -174,20 +188,24 @@ def render_image_with_propnet(
     estimator: PropNetEstimator,
     rays: Rays,
     # rendering options
-    num_samples: int,
-    num_samples_per_prop: Sequence[int],
-    near_plane: Optional[float] = None,
-    far_plane: Optional[float] = None,
-    sampling_type: Literal["uniform", "lindisp"] = "lindisp",
-    opaque_bkgd: bool = True,
-    render_bkgd: Optional[torch.Tensor] = None,
+    num_samples: int, # 64
+    num_samples_per_prop: Sequence[int], # [128]
+    near_plane: Optional[float] = None, # 2.0
+    far_plane: Optional[float] = None, # 6.0
+    sampling_type: Literal["uniform", "lindisp"] = "lindisp", # 'uniform'
+    opaque_bkgd: bool = True, # False
+    render_bkgd: Optional[torch.Tensor] = None, # tensor([1., 1., 1.], device='cuda:0')
     # train options
     proposal_requires_grad: bool = False,
     # test options
     test_chunk_size: int = 8192,
 ):
     """Render the pixels of an image."""
-    rays_shape = rays.origins.shape
+    # rays is tuple: len = 2
+    #     tensor [item] size: [4096, 3], min: -3.939868, max: 4.030528, mean: 0.648457
+    #     tensor [item] size: [4096, 3], min: -0.999591, max: 0.99991, mean: -0.154509
+
+    rays_shape = rays.origins.shape # ---- [4096, 3]
     if len(rays_shape) == 3:
         height, width, _ = rays_shape
         num_rays = height * width
@@ -430,6 +448,8 @@ def render_image_with_occgrid_test(
 
     rgb = rgb + render_bkgd * (1.0 - opacity)
     depth = depth / opacity.clamp_min(torch.finfo(rgbs.dtype).eps)
+
+    pdb.set_trace()
 
     return (
         rgb.view((*rays_shape[:-1], -1)),

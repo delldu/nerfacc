@@ -9,7 +9,8 @@ from ..volrend import (
     render_visibility_from_density,
 )
 from .base import AbstractEstimator
-
+import todos
+import pdb
 
 class OccGridEstimator(AbstractEstimator):
     """Occupancy grid transmittance estimator for spatial skipping.
@@ -34,6 +35,11 @@ class OccGridEstimator(AbstractEstimator):
         **kwargs,
     ) -> None:
         super().__init__()
+        # roi_aabb = tensor([-1.500000, -1.500000, -1.500000,  1.500000,  1.500000,  1.500000],
+        #        device='cuda:0')
+        # resolution = tensor([128, 128, 128], dtype=torch.int32)
+        # levels = 1
+        # kwargs = {}
 
         if "contraction_type" in kwargs:
             raise ValueError(
@@ -60,31 +66,26 @@ class OccGridEstimator(AbstractEstimator):
         )
 
         # total number of voxels
-        self.cells_per_lvl = int(resolution.prod().item())
+        self.cells_per_lvl = int(resolution.prod().item()) # 128*128*128
         self.levels = levels
 
         # Buffers
         self.register_buffer("resolution", resolution)  # [3]
         self.register_buffer("aabbs", aabbs)  # [n_aabbs, 6]
-        self.register_buffer(
-            "occs", torch.zeros(self.levels * self.cells_per_lvl)
-        )
-        self.register_buffer(
-            "binaries",
-            torch.zeros([levels] + resolution.tolist(), dtype=torch.bool),
-        )
+        self.register_buffer("occs", torch.zeros(self.levels * self.cells_per_lvl)) # size() -- [128*128*128]
+        self.register_buffer("binaries", torch.zeros([levels] + resolution.tolist(), dtype=torch.bool)) # size() -- [1, 128, 128, 128]
 
         # Grid coords & indices
         grid_coords = _meshgrid3d(resolution).reshape(
             self.cells_per_lvl, self.DIM
         )
-        self.register_buffer("grid_coords", grid_coords, persistent=False)
+        self.register_buffer("grid_coords", grid_coords, persistent=False) # [128*128*128, 3] 
         grid_indices = torch.arange(self.cells_per_lvl)
-        self.register_buffer("grid_indices", grid_indices, persistent=False)
+        self.register_buffer("grid_indices", grid_indices, persistent=False) # [128*128*128]
+
 
     @torch.no_grad()
-    def sampling(
-        self,
+    def sampling(self,
         # rays
         rays_o: Tensor,  # [n_rays, 3]
         rays_d: Tensor,  # [n_rays, 3]
@@ -221,8 +222,7 @@ class OccGridEstimator(AbstractEstimator):
         return ray_indices, t_starts, t_ends
 
     @torch.no_grad()
-    def update_every_n_steps(
-        self,
+    def update_every_n_steps(self,
         step: int,
         occ_eval_fn: Callable,
         occ_thre: float = 1e-2,

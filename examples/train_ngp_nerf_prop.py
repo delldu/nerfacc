@@ -98,7 +98,9 @@ else:
     from datasets.nerf_synthetic import SubjectLoader
 
     # training parameters
-    max_steps = 20000
+    # max_steps = 20000
+    max_steps = 2000
+
     init_batch_size = 4096
     weight_decay = (
         1e-5 if args.scene in ["materials", "ficus", "drums"] else 1e-6

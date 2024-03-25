@@ -227,11 +227,11 @@ for step in range(max_steps + 1):
                 psnr = -10.0 * torch.log(mse) / np.log(10.0)
                 psnrs.append(psnr.item())
                 lpips.append(lpips_fn(rgb, pixels).item())
-                # if i == 0:
-                #     imageio.imwrite(
-                #         "rgb_test.png",
-                #         (rgb.cpu().numpy() * 255).astype(np.uint8),
-                #     )
+                if i % 100 == 0:
+                    imageio.imwrite(
+                        "rgb_test.png",
+                        (rgb.cpu().numpy() * 255).astype(np.uint8),
+                    )
                 #     imageio.imwrite(
                 #         "rgb_error.png",
                 #         (

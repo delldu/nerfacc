@@ -212,8 +212,7 @@ class SubjectLoader(torch.utils.data.Dataset):
 
     OPENGL_CAMERA = False
 
-    def __init__(
-        self,
+    def __init__(self,
         subject_id: str,
         root_fp: str,
         split: str,

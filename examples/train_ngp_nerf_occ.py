@@ -19,11 +19,11 @@ from examples.utils import (
     MIPNERF360_UNBOUNDED_SCENES,
     NERF_SYNTHETIC_SCENES,
     render_image_with_occgrid,
-    render_image_with_occgrid_test,
     set_random_seed,
 )
 from nerfacc.estimators.occ_grid import OccGridEstimator
-
+import todos
+import pdb
 
 def run(args):
     device = "cuda:0"
@@ -56,7 +56,8 @@ def run(args):
         from datasets.nerf_synthetic import SubjectLoader
 
         # training parameters
-        max_steps = 20000
+        # max_steps = 20000
+        max_steps = 2000
         init_batch_size = 1024
         target_sample_batch_size = 1 << 18
         weight_decay = (
@@ -94,8 +95,8 @@ def run(args):
         device=device,
         **test_dataset_kwargs,
     )
-
-    if args.vdb:
+    # args = Namespace(data_root='data/nerf_synthetic', train_split='train', scene='lego', vdb=False)
+    if args.vdb: # False
         from fvdb import sparse_grid_from_dense
 
         from nerfacc.estimators.vdb import VDBEstimator
@@ -115,6 +116,7 @@ def run(args):
         estimator = OccGridEstimator(
             roi_aabb=aabb, resolution=grid_resolution, levels=grid_nlvl
         ).to(device)
+        # pp estimator.grid_coords.size() -- torch.Size([128*128*128, 3])
 
     # setup the radiance field we want to train.
     grad_scaler = torch.cuda.amp.GradScaler(2**10)
@@ -148,6 +150,7 @@ def run(args):
     # training
     tic = time.time()
     for step in range(max_steps + 1):
+
         radiance_field.train()
         estimator.train()
 
@@ -160,7 +163,7 @@ def run(args):
 
         def occ_eval_fn(x):
             density = radiance_field.query_density(x)
-            return density * render_step_size
+            return density * render_step_size # 5e-3
 
         # update occupancy grid
         estimator.update_every_n_steps(
@@ -176,7 +179,7 @@ def run(args):
             rays,
             # rendering options
             near_plane=near_plane,
-            render_step_size=render_step_size,
+            render_step_size=render_step_size, # 5e-3
             render_bkgd=render_bkgd,
             cone_angle=cone_angle,
             alpha_thre=alpha_thre,
@@ -228,19 +231,6 @@ def run(args):
                     pixels = data["pixels"]
 
                     # rendering
-                    # rgb, acc, depth, _ = render_image_with_occgrid_test(
-                    #     1024,
-                    #     # scene
-                    #     radiance_field,
-                    #     estimator,
-                    #     rays,
-                    #     # rendering options
-                    #     near_plane=near_plane,
-                    #     render_step_size=render_step_size,
-                    #     render_bkgd=render_bkgd,
-                    #     cone_angle=cone_angle,
-                    #     alpha_thre=alpha_thre,
-                    # )
                     rgb, acc, depth, _ = render_image_with_occgrid(
                         radiance_field,
                         estimator,
@@ -256,11 +246,11 @@ def run(args):
                     psnr = -10.0 * torch.log(mse) / np.log(10.0)
                     psnrs.append(psnr.item())
                     lpips.append(lpips_fn(rgb, pixels).item())
-                    # if i == 0:
-                    #     imageio.imwrite(
-                    #         "rgb_test.png",
-                    #         (rgb.cpu().numpy() * 255).astype(np.uint8),
-                    #     )
+                    if i == 0:
+                        imageio.imwrite(
+                            "rgb_test.png",
+                            (rgb.cpu().numpy() * 255).astype(np.uint8),
+                        )
                     #     imageio.imwrite(
                     #         "rgb_error.png",
                     #         (
