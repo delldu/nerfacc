@@ -10,7 +10,8 @@ from torch import Tensor
 from .cuda import is_cub_available
 from .pack import pack_info
 from .scan import exclusive_prod, exclusive_sum
-
+import todos
+import pdb
 
 def rendering(
     # ray marching results
@@ -94,12 +95,8 @@ def rendering(
         # else:
         #     rgbs = torch.empty((0, 3), device=t_starts.device)
         #     sigmas = torch.empty((0,), device=t_starts.device)
-        assert rgbs.shape[-1] == 3, "rgbs must have 3 channels, got {}".format(
-            rgbs.shape
-        )
-        assert (
-            sigmas.shape == t_starts.shape
-        ), "sigmas must have shape of (N,)! Got {}".format(sigmas.shape)
+        assert rgbs.shape[-1] == 3, "rgbs must have 3 channels, got {}".format(rgbs.shape)
+        assert (sigmas.shape == t_starts.shape), "sigmas must have shape of (N,)! Got {}".format(sigmas.shape)
         # Rendering: compute weights.
         weights, trans, alphas = render_weight_from_density(
             t_starts,
@@ -108,6 +105,7 @@ def rendering(
             ray_indices=ray_indices,
             n_rays=n_rays,
         )
+        # ==> pdb.set_trace()
         extras = {
             "weights": weights,
             "alphas": alphas,
@@ -122,12 +120,8 @@ def rendering(
         # else:
         #     rgbs = torch.empty((0, 3), device=t_starts.device)
         #     alphas = torch.empty((0,), device=t_starts.device)
-        assert rgbs.shape[-1] == 3, "rgbs must have 3 channels, got {}".format(
-            rgbs.shape
-        )
-        assert (
-            alphas.shape == t_starts.shape
-        ), "alphas must have shape of (N,)! Got {}".format(alphas.shape)
+        assert rgbs.shape[-1] == 3, "rgbs must have 3 channels, got {}".format(rgbs.shape)
+        assert (alphas.shape == t_starts.shape), "alphas must have shape of (N,)! Got {}".format(alphas.shape)
         # Rendering: compute weights.
         weights, trans = render_weight_from_alpha(
             alphas,
@@ -142,12 +136,8 @@ def rendering(
         }
 
     # Rendering: accumulate rgbs, opacities, and depths along the rays.
-    colors = accumulate_along_rays(
-        weights, values=rgbs, ray_indices=ray_indices, n_rays=n_rays
-    )
-    opacities = accumulate_along_rays(
-        weights, values=None, ray_indices=ray_indices, n_rays=n_rays
-    )
+    colors = accumulate_along_rays(weights, values=rgbs, ray_indices=ray_indices, n_rays=n_rays)
+    opacities = accumulate_along_rays(weights, values=None, ray_indices=ray_indices, n_rays=n_rays)
     depths = accumulate_along_rays(
         weights,
         values=(t_starts + t_ends)[..., None] / 2.0,
@@ -208,11 +198,11 @@ def render_transmittance_from_alpha(
         packed_info = pack_info(ray_indices, n_rays)
         ray_indices = None
 
-    trans = exclusive_prod(
-        1 - alphas, packed_info=packed_info, indices=ray_indices
-    )
+    trans = exclusive_prod(1 - alphas, packed_info=packed_info, indices=ray_indices)
     if prefix_trans is not None:
         trans *= prefix_trans
+
+    pdb.set_trace()
     return trans
 
 
@@ -270,11 +260,10 @@ def render_transmittance_from_density(
 
     sigmas_dt = sigmas * (t_ends - t_starts)
     alphas = 1.0 - torch.exp(-sigmas_dt)
-    trans = torch.exp(
-        -exclusive_sum(sigmas_dt, packed_info=packed_info, indices=ray_indices)
-    )
-    if prefix_trans is not None:
+    trans = torch.exp(-exclusive_sum(sigmas_dt, packed_info=packed_info, indices=ray_indices))
+    if prefix_trans is not None: # False
         trans = trans * prefix_trans
+        pdb.set_trace()
     return trans, alphas
 
 
@@ -316,10 +305,10 @@ def render_weight_from_alpha(
         transmittance: [1.00, 0.60, 0.12, 1.00, 0.20, 1.00, 1.00]
 
     """
-    trans = render_transmittance_from_alpha(
-        alphas, packed_info, ray_indices, n_rays, prefix_trans
-    )
+    trans = render_transmittance_from_alpha(alphas, packed_info, ray_indices, n_rays, prefix_trans)
     weights = trans * alphas
+    pdb.set_trace()
+
     return weights, trans
 
 
@@ -373,6 +362,7 @@ def render_weight_from_density(
         t_starts, t_ends, sigmas, packed_info, ray_indices, n_rays, prefix_trans
     )
     weights = trans * alphas
+    # ==> pdb.set_trace()
     return weights, trans, alphas
 
 
@@ -423,12 +413,12 @@ def render_visibility_from_alpha(
         tensor([True,  True, False,  True, False, False,  True])
 
     """
-    trans = render_transmittance_from_alpha(
-        alphas, packed_info, ray_indices, n_rays, prefix_trans
-    )
+    trans = render_transmittance_from_alpha(alphas, packed_info, ray_indices, n_rays, prefix_trans)
     vis = trans >= early_stop_eps
     if alpha_thre > 0:
         vis = vis & (alphas >= alpha_thre)
+
+    pdb.set_trace()
     return vis
 
 
@@ -485,12 +475,12 @@ def render_visibility_from_density(
         tensor([True,  True, False,  True, False, False,  True])
 
     """
-    trans, alphas = render_transmittance_from_density(
-        t_starts, t_ends, sigmas, packed_info, ray_indices, n_rays, prefix_trans
-    )
+    trans, alphas = render_transmittance_from_density(t_starts, t_ends, sigmas, packed_info, ray_indices, n_rays, prefix_trans)
     vis = trans >= early_stop_eps
-    if alpha_thre > 0:
+    if alpha_thre > 0: # False
+        pdb.set_trace()
         vis = vis & (alphas >= alpha_thre)
+
     return vis
 
 

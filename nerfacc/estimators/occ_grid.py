@@ -61,9 +61,7 @@ class OccGridEstimator(AbstractEstimator):
         assert roi_aabb.shape[0] == self.DIM * 2, f"Invalid shape: {roi_aabb}!"
 
         # multiple levels of aabbs
-        aabbs = torch.stack(
-            [_enlarge_aabb(roi_aabb, 2**i) for i in range(levels)], dim=0
-        )
+        aabbs = torch.stack([_enlarge_aabb(roi_aabb, 2**i) for i in range(levels)], dim=0)
 
         # total number of voxels
         self.cells_per_lvl = int(resolution.prod().item()) # 128*128*128
@@ -100,7 +98,7 @@ class OccGridEstimator(AbstractEstimator):
         render_step_size: float = 1e-3,
         early_stop_eps: float = 1e-4,
         alpha_thre: float = 0.0,
-        stratified: bool = False,
+        stratified: bool = True,
         cone_angle: float = 0.0,
     ) -> Tuple[Tensor, Tensor, Tensor]:
         """Sampling with spatial skipping.
@@ -151,17 +149,22 @@ class OccGridEstimator(AbstractEstimator):
             >>> sample_locs = rays_o[ray_indices] + t_mid * rays_d[ray_indices]
 
         """
-
-        near_planes = torch.full_like(rays_o[..., 0], fill_value=near_plane)
-        far_planes = torch.full_like(rays_o[..., 0], fill_value=far_plane)
+        near_planes = torch.full_like(rays_o[..., 0], fill_value=near_plane) # size() -- [1024]
+        far_planes = torch.full_like(rays_o[..., 0], fill_value=far_plane) # size() -- [1024]
 
         if t_min is not None:
+            pdb.set_trace()
             near_planes = torch.clamp(near_planes, min=t_min)
-        if t_max is not None:
+        if t_max is not None: # False
+            pdb.set_trace()
             far_planes = torch.clamp(far_planes, max=t_max)
 
-        if stratified:
+        if stratified: # True
             near_planes += torch.rand_like(near_planes) * render_step_size
+        else:
+            pass
+            # ==> pdb.set_trace()
+
         intervals, samples, _ = traverse_grids(
             rays_o,
             rays_d,
@@ -178,9 +181,7 @@ class OccGridEstimator(AbstractEstimator):
         packed_info = samples.packed_info
 
         # skip invisible space
-        if (alpha_thre > 0.0 or early_stop_eps > 0.0) and (
-            sigma_fn is not None or alpha_fn is not None
-        ):
+        if (alpha_thre > 0.0 or early_stop_eps > 0.0) and (sigma_fn is not None or alpha_fn is not None):
             alpha_thre = min(alpha_thre, self.occs.mean().item())
 
             # Compute visibility of the samples, and filter out invisible samples
@@ -188,10 +189,10 @@ class OccGridEstimator(AbstractEstimator):
                 if t_starts.shape[0] != 0:
                     sigmas = sigma_fn(t_starts, t_ends, ray_indices)
                 else:
+                    pdb.set_trace()
                     sigmas = torch.empty((0,), device=t_starts.device)
-                assert (
-                    sigmas.shape == t_starts.shape
-                ), "sigmas must have shape of (N,)! Got {}".format(sigmas.shape)
+                assert (sigmas.shape == t_starts.shape), "sigmas must have shape of (N,)! Got {}".format(sigmas.shape)
+
                 masks = render_visibility_from_density(
                     t_starts=t_starts,
                     t_ends=t_ends,
@@ -201,6 +202,8 @@ class OccGridEstimator(AbstractEstimator):
                     alpha_thre=alpha_thre,
                 )
             elif alpha_fn is not None:
+                pdb.set_trace()
+                
                 if t_starts.shape[0] != 0:
                     alphas = alpha_fn(t_starts, t_ends, ray_indices)
                 else:
@@ -260,8 +263,7 @@ class OccGridEstimator(AbstractEstimator):
 
     # adapted from https://github.com/kwea123/ngp_pl/blob/master/models/networks.py
     @torch.no_grad()
-    def mark_invisible_cells(
-        self,
+    def mark_invisible_cells(self,
         K: Tensor,
         c2w: Tensor,
         width: int,
@@ -269,6 +271,7 @@ class OccGridEstimator(AbstractEstimator):
         near_plane: float = 0.0,
         chunk: int = 32**3,
     ) -> None:
+        pdb.set_trace()
         """Mark the cells that aren't covered by the cameras with density -1.
         Should only be executed once before training starts.
 
@@ -335,9 +338,9 @@ class OccGridEstimator(AbstractEstimator):
     def _get_all_cells(self) -> List[Tensor]:
         """Returns all cells of the grid."""
         lvl_indices = []
-        for lvl in range(self.levels):
+        for lvl in range(self.levels): # self.levels ---- 1
             # filter out the cells with -1 density (non-visible to any camera)
-            cell_ids = lvl * self.cells_per_lvl + self.grid_indices
+            cell_ids = lvl * self.cells_per_lvl + self.grid_indices # self.cells_per_lvl -- 128*128*128
             indices = self.grid_indices[self.occs[cell_ids] >= 0.0]
             lvl_indices.append(indices)
         return lvl_indices
@@ -364,8 +367,7 @@ class OccGridEstimator(AbstractEstimator):
         return lvl_indices
 
     @torch.no_grad()
-    def _update(
-        self,
+    def _update(self,
         step: int,
         occ_eval_fn: Callable,
         occ_thre: float = 0.01,
@@ -383,19 +385,13 @@ class OccGridEstimator(AbstractEstimator):
         for lvl, indices in enumerate(lvl_indices):
             # infer occupancy: density * step_size
             grid_coords = self.grid_coords[indices]
-            x = (
-                grid_coords + torch.rand_like(grid_coords, dtype=torch.float32)
-            ) / self.resolution
+            x = (grid_coords + torch.rand_like(grid_coords, dtype=torch.float32)) / self.resolution
             # voxel coordinates [0, 1]^3 -> world
-            x = self.aabbs[lvl, :3] + x * (
-                self.aabbs[lvl, 3:] - self.aabbs[lvl, :3]
-            )
+            x = self.aabbs[lvl, :3] + x * (self.aabbs[lvl, 3:] - self.aabbs[lvl, :3])
             occ = occ_eval_fn(x).squeeze(-1)
             # ema update
             cell_ids = lvl * self.cells_per_lvl + indices
-            self.occs[cell_ids] = torch.maximum(
-                self.occs[cell_ids] * ema_decay, occ
-            )
+            self.occs[cell_ids] = torch.maximum(self.occs[cell_ids] * ema_decay, occ)
             # suppose to use scatter max but emperically it is almost the same.
             # self.occs, _ = scatter_max(
             #     occ, indices, dim=0, out=self.occs * ema_decay
@@ -410,7 +406,7 @@ def _meshgrid3d(
     """Create 3D grid coordinates."""
     assert len(res) == 3
     res = res.tolist()
-    return torch.stack(
+    output =  torch.stack(
         torch.meshgrid(
             [
                 torch.arange(res[0], dtype=torch.long),
@@ -421,3 +417,12 @@ def _meshgrid3d(
         ),
         dim=-1,
     ).to(device)
+    # tensor [output] size: [128, 128, 128, 3], min: 0.0, max: 127.0, mean: 63.5, torch.int64
+    # (Pdb) output[3, 5]
+    # tensor([[  3,   5,   0],
+    #         [  3,   5,   1],
+    #         [  3,   5,   2],
+    #         ...,
+    #         [  3,   5, 126],
+    #         [  3,   5, 127]])
+    return output

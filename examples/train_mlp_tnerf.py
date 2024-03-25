@@ -61,7 +61,9 @@ parser.add_argument(
 args = parser.parse_args()
 
 # training parameters
-max_steps = 30000
+#max_steps = 30000
+max_steps = 2000
+
 init_batch_size = 1024
 target_sample_batch_size = 1 << 16
 # scene parameters

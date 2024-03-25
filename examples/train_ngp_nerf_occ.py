@@ -113,32 +113,22 @@ def run(args):
         estimator = VDBEstimator(grid).to(device)
         estimator.aabbs = [aabb]
     else:
-        estimator = OccGridEstimator(
-            roi_aabb=aabb, resolution=grid_resolution, levels=grid_nlvl
-        ).to(device)
+        estimator = OccGridEstimator(roi_aabb=aabb, resolution=grid_resolution, levels=grid_nlvl).to(device)
         # pp estimator.grid_coords.size() -- torch.Size([128*128*128, 3])
 
     # setup the radiance field we want to train.
     grad_scaler = torch.cuda.amp.GradScaler(2**10)
     radiance_field = NGPRadianceField(aabb=estimator.aabbs[-1]).to(device)
-    optimizer = torch.optim.Adam(
-        radiance_field.parameters(),
+    optimizer = torch.optim.Adam(radiance_field.parameters(),
         lr=1e-2,
         eps=1e-15,
         weight_decay=weight_decay,
     )
     scheduler = torch.optim.lr_scheduler.ChainedScheduler(
         [
-            torch.optim.lr_scheduler.LinearLR(
-                optimizer, start_factor=0.01, total_iters=100
-            ),
-            torch.optim.lr_scheduler.MultiStepLR(
-                optimizer,
-                milestones=[
-                    max_steps // 2,
-                    max_steps * 3 // 4,
-                    max_steps * 9 // 10,
-                ],
+            torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=0.01, total_iters=100),
+            torch.optim.lr_scheduler.MultiStepLR(optimizer,
+                milestones=[max_steps // 2, max_steps * 3 // 4, max_steps * 9 // 10],
                 gamma=0.33,
             ),
         ]
@@ -166,11 +156,7 @@ def run(args):
             return density * render_step_size # 5e-3
 
         # update occupancy grid
-        estimator.update_every_n_steps(
-            step=step,
-            occ_eval_fn=occ_eval_fn,
-            occ_thre=1e-2,
-        )
+        estimator.update_every_n_steps(step=step, occ_eval_fn=occ_eval_fn, occ_thre=1e-2)
 
         # render
         rgb, acc, depth, n_rendering_samples = render_image_with_occgrid(
@@ -205,7 +191,8 @@ def run(args):
         optimizer.step()
         scheduler.step()
 
-        if step % 10000 == 0:
+        # if step % 10000 == 0:
+        if step % 100 == 0:
             elapsed_time = time.time() - tic
             loss = F.mse_loss(rgb, pixels)
             psnr = -10.0 * torch.log(loss) / np.log(10.0)

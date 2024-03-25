@@ -79,6 +79,8 @@ def render_image_with_occgrid(
 
     rays_shape = rays.origins.shape # [1024, 3]
     if len(rays_shape) == 3: # False
+        # rays.origins.size() -- [800, 800, 3]
+        # ==> pdb.set_trace()
         height, width, _ = rays_shape
         num_rays = height * width
         rays = namedtuple_map(
@@ -101,14 +103,15 @@ def render_image_with_occgrid(
 
         def sigma_fn(t_starts, t_ends, ray_indices):
             if t_starts.shape[0] == 0:
+                pdb.set_trace()
                 sigmas = torch.empty((0, 1), device=t_starts.device)
             else:
                 t_origins = rays_o[ray_indices]
                 t_dirs = rays_d[ray_indices]
-                positions = (
-                    t_origins + t_dirs * (t_starts + t_ends)[:, None] / 2.0
-                )
+                positions = (t_origins + t_dirs * (t_starts + t_ends)[:, None] / 2.0)
                 if timestamps is not None: # False
+                    pdb.set_trace()
+
                     # dnerf
                     t = (
                         timestamps[ray_indices]
@@ -122,14 +125,13 @@ def render_image_with_occgrid(
 
         def rgb_sigma_fn(t_starts, t_ends, ray_indices):
             if t_starts.shape[0] == 0:
+                pdb.set_trace()
                 rgbs = torch.empty((0, 3), device=t_starts.device)
                 sigmas = torch.empty((0, 1), device=t_starts.device)
             else:
                 t_origins = rays_o[ray_indices]
                 t_dirs = rays_d[ray_indices]
-                positions = (
-                    t_origins + t_dirs * (t_starts + t_ends)[:, None] / 2.0
-                )
+                positions = (t_origins + t_dirs * (t_starts + t_ends)[:, None] / 2.0)
                 if timestamps is not None: # False
                     # dnerf
                     t = (
@@ -163,6 +165,7 @@ def render_image_with_occgrid(
         )
         chunk_results = [rgb, opacity, depth, len(t_starts)]
         results.append(chunk_results)
+
     colors, opacities, depths, n_rendering_samples = [
         torch.cat(r, dim=0) if isinstance(r[0], torch.Tensor) else r
         for r in zip(*results)
@@ -204,6 +207,7 @@ def render_image_with_propnet(
     # rays is tuple: len = 2
     #     tensor [item] size: [4096, 3], min: -3.939868, max: 4.030528, mean: 0.648457
     #     tensor [item] size: [4096, 3], min: -0.999591, max: 0.99991, mean: -0.154509
+    pdb.set_trace()
 
     rays_shape = rays.origins.shape # ---- [4096, 3]
     if len(rays_shape) == 3:
@@ -301,8 +305,11 @@ def render_image_with_occgrid_test(
     timestamps: Optional[torch.Tensor] = None,
 ):
     """Render the pixels of an image."""
+    pdb.set_trace()
+    
     rays_shape = rays.origins.shape
     if len(rays_shape) == 3:
+        pdb.set_trace()
         height, width, _ = rays_shape
         num_rays = height * width
         rays = namedtuple_map(

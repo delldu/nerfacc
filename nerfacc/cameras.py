@@ -41,9 +41,7 @@ def opencv_lens_undistortion(
     batch_shape = uv.shape[:-1]
     params = torch.broadcast_to(params, batch_shape + (params.shape[-1],))
 
-    return _C.opencv_lens_undistortion(
-        uv.contiguous(), params.contiguous(), eps, iters
-    )
+    return _C.opencv_lens_undistortion(uv.contiguous(), params.contiguous(), eps, iters)
 
 
 def opencv_lens_undistortion_fisheye(

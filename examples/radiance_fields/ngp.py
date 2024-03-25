@@ -73,8 +73,7 @@ def contract_to_unisphere(
 class NGPRadianceField(torch.nn.Module):
     """Instance-NGP Radiance Field"""
 
-    def __init__(
-        self,
+    def __init__(self,
         aabb: Union[torch.Tensor, List[float]],
         num_dim: int = 3,
         use_viewdirs: bool = True,
@@ -95,6 +94,7 @@ class NGPRadianceField(torch.nn.Module):
         # aabb = tensor([-1.500000, -1.500000, -1.500000,  1.500000,  1.500000,  1.500000],
         #        device='cuda:0')
         if not isinstance(aabb, torch.Tensor):
+            pdb.set_trace()
             aabb = torch.tensor(aabb, dtype=torch.float32)
 
         # Turns out rectangle aabb will leads to uneven collision so bad performance.
@@ -108,15 +108,13 @@ class NGPRadianceField(torch.nn.Module):
         self.use_viewdirs = use_viewdirs
         self.density_activation = density_activation
         self.unbounded = unbounded
-        self.base_resolution = base_resolution
-        self.max_resolution = max_resolution
+        # self.base_resolution = base_resolution
+        # self.max_resolution = max_resolution
         self.geo_feat_dim = geo_feat_dim
-        self.n_levels = n_levels
-        self.log2_hashmap_size = log2_hashmap_size
+        # self.n_levels = n_levels
+        # self.log2_hashmap_size = log2_hashmap_size
 
-        per_level_scale = np.exp(
-            (np.log(max_resolution) - np.log(base_resolution)) / (n_levels - 1)
-        ).tolist() # 1.447269237440378
+        per_level_scale = np.exp((np.log(max_resolution) - np.log(base_resolution)) / (n_levels - 1)).tolist() # 1.4472
 
         if self.use_viewdirs: # True
             self.direction_encoding = tcnn.Encoding(
@@ -177,6 +175,7 @@ class NGPRadianceField(torch.nn.Module):
         # todos.debug.output_var("x", x)
         # tensor [x] size: [2097152, 3], min: -1.5, max: 1.5, mean: -2e-06
         if self.unbounded: # False
+            pdb.set_trace()
             x = contract_to_unisphere(x, self.aabb)
         else:
             aabb_min, aabb_max = torch.split(self.aabb, self.num_dim, dim=-1)
@@ -188,9 +187,7 @@ class NGPRadianceField(torch.nn.Module):
             .to(x)
         )
         # tensor [x] size: [2097152, 16], min: -0.00016, max: 0.000146, mean: 1e-06
-        density_before_activation, base_mlp_out = torch.split(
-            x, [1, self.geo_feat_dim], dim=-1
-        )
+        density_before_activation, base_mlp_out = torch.split(x, [1, self.geo_feat_dim], dim=-1)
         density = (
             self.density_activation(density_before_activation)
             * selector[..., None]
@@ -213,6 +210,7 @@ class NGPRadianceField(torch.nn.Module):
             d = self.direction_encoding(dir.reshape(-1, dir.shape[-1]))
             h = torch.cat([d, embedding.reshape(-1, self.geo_feat_dim)], dim=-1)
         else:
+            pdb.set_trace()
             h = embedding.reshape(-1, self.geo_feat_dim)
         rgb = (
             self.mlp_head(h)
@@ -221,6 +219,8 @@ class NGPRadianceField(torch.nn.Module):
         )
         if apply_act: # True
             rgb = torch.sigmoid(rgb)
+        else:
+            pdb.set_trace()
 
         # tensor [rgb] size: [280255, 3], min: 0.483968, max: 0.635222, mean: 0.562799
         return rgb
@@ -229,6 +229,7 @@ class NGPRadianceField(torch.nn.Module):
         positions: torch.Tensor,
         directions: torch.Tensor = None,
     ):
+        # ==> pdb.set_trace()
         if self.use_viewdirs and (directions is not None):
             assert (
                 positions.shape == directions.shape
@@ -261,14 +262,12 @@ class NGPDensityField(torch.nn.Module):
         self.num_dim = num_dim
         self.density_activation = density_activation
         self.unbounded = unbounded
-        self.base_resolution = base_resolution
-        self.max_resolution = max_resolution
-        self.n_levels = n_levels
-        self.log2_hashmap_size = log2_hashmap_size
+        # self.base_resolution = base_resolution
+        # self.max_resolution = max_resolution
+        # self.n_levels = n_levels
+        # self.log2_hashmap_size = log2_hashmap_size
 
-        per_level_scale = np.exp(
-            (np.log(max_resolution) - np.log(base_resolution)) / (n_levels - 1)
-        ).tolist()
+        per_level_scale = np.exp((np.log(max_resolution) - np.log(base_resolution)) / (n_levels - 1)).tolist()
 
         self.mlp_base = tcnn.NetworkWithInputEncoding(
             n_input_dims=num_dim,
@@ -311,8 +310,5 @@ class NGPDensityField(torch.nn.Module):
             .view(list(positions.shape[:-1]) + [1])
             .to(positions)
         )
-        density = (
-            self.density_activation(density_before_activation)
-            * selector[..., None]
-        )
+        density = self.density_activation(density_before_activation) * selector[..., None]
         return density
