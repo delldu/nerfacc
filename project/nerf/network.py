@@ -17,11 +17,17 @@ import tinycudann as tcnn
 from torch.autograd import Function
 from torch.cuda.amp import custom_bwd, custom_fwd
 
+from nerfacc import (
+    accumulate_along_rays,
+    render_weight_from_density,
+)
+
 from typing import Callable, List, Union
 
 import todos
 import pdb
 
+# Come from nerfacc/examples/radiance_fields/ngp.py
 
 class _TruncExp(Function):  # pylint: disable=abstract-method
     # Implementation from torch-ngp:
@@ -55,11 +61,6 @@ class RadianceField(nn.Module):
         log2_hashmap_size: int = 19,
     ):
         super().__init__()
-        # self = RadianceField(
-        #   (direction_encoding): Encoding(n_input_dims=3, n_output_dims=16, seed=1337, dtype=torch.float16, hyperparams={'nested': [{'degree': 4, 'otype': 'SphericalHarmonics'}], 'otype': 'Composite'})
-        #   (mlp_base): NetworkWithInputEncoding(n_input_dims=3, n_output_dims=16, seed=1337, dtype=torch.float16, hyperparams={'encoding': {'base_resolution': 16, 'hash': 'CoherentPrime', 'interpolation': 'Linear', 'log2_hashmap_size': 19, 'n_features_per_level': 2, 'n_levels': 16, 'otype': 'Grid', 'per_level_scale': 1.4472692012786865, 'type': 'Hash'}, 'network': {'activation': 'ReLU', 'n_hidden_layers': 1, 'n_neurons': 64, 'otype': 'FullyFusedMLP', 'output_activation': 'None'}, 'otype': 'NetworkWithInputEncoding'})
-        #   (mlp_head): Network(n_input_dims=31, n_output_dims=3, seed=1337, dtype=torch.float16, hyperparams={'encoding': {'offset': 0.0, 'otype': 'Identity', 'scale': 1.0}, 'network': {'activation': 'ReLU', 'n_hidden_layers': 2, 'n_neurons': 64, 'otype': 'FullyFusedMLP', 'output_activation': 'None'}, 'otype': 'NetworkWithInputEncoding'})
-        # )
         # aabb = tensor([-1.500000, -1.500000, -1.500000,  1.500000,  1.500000,  1.500000],
         #        device='cuda:0')
         if not isinstance(aabb, torch.Tensor):
@@ -170,3 +171,78 @@ class RadianceField(nn.Module):
         rgb = self.query_rgb(directions, embedding=embedding)
         return rgb, density  # type: ignore
 
+    def occ_eval_fn(self, x):
+        render_step_size = 5e-3
+        density = self.query_density(x)
+        return density * render_step_size
+
+    def sigma_fn(self, t_starts, t_ends, rays_o, rays_d, ray_indices):
+        """ Define how to query density for the estimator."""
+        if t_starts.shape[0] == 0:
+            sigmas = torch.empty((0, 1), device=t_starts.device)
+        else:
+            t_origins = rays_o[ray_indices]  # (n_samples, 3)
+            t_dirs = rays_d[ray_indices]  # (n_samples, 3)
+            positions = t_origins + t_dirs * (t_starts + t_ends)[:, None] / 2.0
+            sigmas = self.query_density(positions) 
+        return sigmas.squeeze(-1)  # (n_samples,)
+
+
+    def rgb_sigma_fn(self, t_starts, t_ends, rays_o, rays_d, ray_indices):
+        """ Query rgb and density values from a user-defined radiance field. """
+        if t_starts.shape[0] == 0:
+            rgbs = torch.empty((0, 3), device=t_starts.device)
+            sigmas = torch.empty((0, 1), device=t_starts.device)
+        else:
+            t_origins = rays_o[ray_indices]  # (n_samples, 3)
+            t_dirs = rays_d[ray_indices]  # (n_samples, 3)
+            positions = t_origins + t_dirs * (t_starts + t_ends)[:, None] / 2.0
+            rgbs, sigmas = self.forward(positions, t_dirs)  
+        return rgbs, sigmas.squeeze(-1)  # (n_samples, 3), (n_samples,)
+
+
+    # Come fom nerfacc/volrend/rendering
+    def rendering(self,
+        t_starts, t_ends,
+        rays_o, rays_d, ray_indices,
+        render_bkgd=None,
+        expected_depths=True,
+    ):
+        if ray_indices is not None:
+            assert (t_starts.shape == t_ends.shape == ray_indices.shape), \
+                "Since nerfacc 0.5.0, t_starts, t_ends and ray_indices must have the same shape (N,). "
+
+        rgbs, sigmas = self.rgb_sigma_fn(t_starts, t_ends, rays_o, rays_d, ray_indices)
+        assert rgbs.shape[-1] == 3, "rgbs must have 3 channels, got {}".format(rgbs.shape)
+        assert (sigmas.shape == t_starts.shape), "sigmas must have shape of (N,)! Got {}".format(sigmas.shape)
+
+        n_rays = rays_o.shape[0]
+        # Rendering: compute weights.
+        weights, trans, alphas = render_weight_from_density(t_starts, t_ends, sigmas,
+            ray_indices=ray_indices,
+            n_rays=n_rays,
+        )
+        extras = {
+            "weights": weights,
+            "alphas": alphas,
+            "trans": trans,
+            "sigmas": sigmas,
+            "rgbs": rgbs,
+        }
+
+        # Rendering: accumulate rgbs, opacities, and depths along the rays.
+        colors = accumulate_along_rays(weights, values=rgbs, ray_indices=ray_indices, n_rays=n_rays)
+        opacities = accumulate_along_rays(weights, values=None, ray_indices=ray_indices, n_rays=n_rays)
+        depths = accumulate_along_rays(weights,
+            values=(t_starts + t_ends)[..., None] / 2.0,
+            ray_indices=ray_indices,
+            n_rays=n_rays,
+        )
+        if expected_depths:
+            depths = depths / opacities.clamp_min(torch.finfo(rgbs.dtype).eps)
+
+        # Background composition.
+        if render_bkgd is not None:
+            colors = colors + render_bkgd * (1.0 - opacities)
+
+        return colors, opacities, depths, extras
