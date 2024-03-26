@@ -1,6 +1,12 @@
-"""
-Copyright (c) 2022 Ruilong Li, UC Berkeley.
-"""
+#
+# /************************************************************************************
+# ***
+# ***    Copyright Dell 2024, All Rights Reserved.
+# ***
+# ***    File Author: Dell, Tue 26 Mar 2024 07:32:28 PM CST
+# ***
+# ************************************************************************************/
+#
 
 import json
 import os
@@ -9,30 +15,14 @@ import imageio.v2 as imageio
 import numpy as np
 import torch
 import torch.nn.functional as F
+from nerf import Rays
 
 import todos
 import pdb
 
-from nerf import Rays
-# import collections
-# Rays = collections.namedtuple("Rays", ("origins", "viewdirs"))
 
 
 def _load_renderings(root_fp: str, subject_id: str, split: str):
-    """Load images from disk."""
-    # root_fp = 'data/nerf_synthetic'
-    # subject_id = 'lego'
-    # split = 'train'/'test'
-
-    # if not root_fp.startswith("/"): # True
-    #     # allow relative path. e.g., "./data/nerf_synthetic/"
-    #     root_fp = os.path.join(
-    #         os.path.dirname(os.path.abspath(__file__)),
-    #         "..",
-    #         "..",
-    #         root_fp,
-    #     )
-
     data_dir = os.path.join(root_fp, subject_id)
     # data_dir -- '/media/dell/8t/Workspace/3D/nerfacc/examples/datasets/../../data/nerf_synthetic/lego'
     with open(os.path.join(data_dir, "transforms_{}.json".format(split)), "r") as fp:
