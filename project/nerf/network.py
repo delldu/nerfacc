@@ -201,7 +201,7 @@ class RadianceField(nn.Module):
         return rgbs, sigmas.squeeze(-1)  # (n_samples, 3), (n_samples,)
 
 
-    # Come fom nerfacc/volrend/rendering
+    # Come from nerfacc/volrend/rendering
     def rendering(self,
         t_starts, t_ends,
         rays_o, rays_d, ray_indices,

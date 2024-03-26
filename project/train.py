@@ -13,7 +13,6 @@
 import os
 import math
 import argparse
-import random
 
 import torch
 import torch.nn.functional as F
@@ -24,10 +23,6 @@ from tqdm import tqdm
 
 import todos
 import pdb  # For debug
-
-def set_random_seed(seed):
-    random.seed(seed)
-    torch.manual_seed(seed)
 
 
 def train_step(step, train_dataset, estimator, network, optimizer):
@@ -75,7 +70,7 @@ if __name__ == "__main__":
     if not os.path.exists(args.output):
         os.makedirs(args.output)
 
-    set_random_seed(42)
+    nerf.set_random_seed(42)
     device = todos.model.get_device()
     aabb = torch.tensor([-1.5, -1.5, -1.5, 1.5, 1.5, 1.5], device=device)
 
@@ -87,15 +82,6 @@ if __name__ == "__main__":
         num_rays=args.bs,
         device=device,
     )
-
-    # test_dataset = nerf.SubjectLoader(
-    #     subject_id="lego",
-    #     root_fp=args.data_root,
-    #     split="test",
-    #     num_rays=None,
-    #     device=device,
-    # )
-
 
     # Step 2: get net
     estimator = nerf.GridEstimator(roi_aabb=aabb, resolution=128, levels=1).to(device)

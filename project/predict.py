@@ -13,21 +13,15 @@
 import os
 import math
 import argparse
-import random
 
 import torch
 import torch.nn.functional as F
-import torch.optim as optim
 
 import nerf
 from tqdm import tqdm
 
 import todos
 import pdb  # For debug
-
-def set_random_seed(seed):
-    random.seed(seed)
-    torch.manual_seed(seed)
 
 
 def test_step(step, train_dataset, estimator, network):
@@ -73,7 +67,7 @@ if __name__ == "__main__":
     if not os.path.exists(args.output):
         os.makedirs(args.output)
 
-    set_random_seed(42)
+    nerf.set_random_seed(42)
     device = todos.model.get_device()
     aabb = torch.tensor([-1.5, -1.5, -1.5, 1.5, 1.5, 1.5], device=device)
 

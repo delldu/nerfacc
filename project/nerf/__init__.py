@@ -9,6 +9,7 @@
 # ************************************************************************************/
 #
 import os
+import random
 import torch
 import pdb
 
@@ -24,6 +25,10 @@ def namedtuple_map(fn, tup):
 from .dataset import SubjectLoader
 from .network import RadianceField
 from .occgrid import GridEstimator
+
+def set_random_seed(seed):
+    random.seed(seed)
+    torch.manual_seed(seed)
 
 
 def save_model(estimator, network, psnr, model_path):
