@@ -50,29 +50,29 @@ class GridEstimator(OccGridEstimator):
         ray_indices = samples.ray_indices
 
         # skip invisible space
-        if (early_stop_eps > 0.0) and (sigma_fn is not None):
-            alpha_thre = min(alpha_thre, self.occs.mean().item())
+        # if (early_stop_eps > 0.0) and (sigma_fn is not None):
+        alpha_thre = min(alpha_thre, self.occs.mean().item())
 
-            # Compute visibility of the samples, and filter out invisible samples
-            if t_starts.shape[0] != 0:
-                sigmas = sigma_fn(t_starts, t_ends, rays_o, rays_d, ray_indices)
-            else:
-                sigmas = torch.empty((0,), device=t_starts.device)
-            assert (sigmas.shape == t_starts.shape), "sigmas must have shape of (N,)! Got {}".format(sigmas.shape)
+        # Compute visibility of the samples, and filter out invisible samples
+        if t_starts.shape[0] != 0:
+            sigmas = sigma_fn(t_starts, t_ends, rays_o, rays_d, ray_indices)
+        else:
+            sigmas = torch.empty((0,), device=t_starts.device)
+        assert (sigmas.shape == t_starts.shape), "sigmas must have shape of (N,)! Got {}".format(sigmas.shape)
 
-            packed_info = samples.packed_info
-            masks = render_visibility_from_density(
-                t_starts=t_starts,
-                t_ends=t_ends,
-                sigmas=sigmas,
-                packed_info=packed_info,
-                early_stop_eps=early_stop_eps,
-                alpha_thre=alpha_thre,
-            )
-            ray_indices, t_starts, t_ends = (
-                ray_indices[masks],
-                t_starts[masks],
-                t_ends[masks],
-            )
+        packed_info = samples.packed_info
+        masks = render_visibility_from_density(
+            t_starts=t_starts,
+            t_ends=t_ends,
+            sigmas=sigmas,
+            packed_info=packed_info,
+            early_stop_eps=early_stop_eps,
+            alpha_thre=alpha_thre,
+        )
+        ray_indices, t_starts, t_ends = (
+            ray_indices[masks],
+            t_starts[masks],
+            t_ends[masks],
+        )
         return ray_indices, t_starts, t_ends
 

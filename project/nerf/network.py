@@ -130,7 +130,7 @@ class RadianceField(nn.Module):
         # todos.debug.output_var("x", x)
         # tensor [x] size: [2097152, 3], min: -1.5, max: 1.5, mean: -2e-06
         aabb_min, aabb_max = torch.split(self.aabb, self.num_dim, dim=-1)
-        x = (x - aabb_min) / (aabb_max - aabb_min)
+        x = (x - aabb_min) / (aabb_max - aabb_min + 1e-5)
         selector = ((x > 0.0) & (x < 1.0)).all(dim=-1)
         x = (
             self.mlp_base(x.view(-1, self.num_dim))

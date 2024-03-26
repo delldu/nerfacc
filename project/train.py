@@ -30,7 +30,7 @@ def set_random_seed(seed):
     torch.manual_seed(seed)
 
 
-def train_step(step, train_dataset, estimator, network, optimizer, device):
+def train_step(step, train_dataset, estimator, network, optimizer):
     """Trainning model ..."""
     grad_scaler = torch.cuda.amp.GradScaler(2**10)
 
@@ -43,22 +43,10 @@ def train_step(step, train_dataset, estimator, network, optimizer, device):
     color_gt = data["pixels"]
     # tensor [color_gt] size: [1024, 3], min: 0.0, max: 1.0, mean: 0.837546
 
-    rays_o = rays.origins
-    rays_d = rays.viewdirs
+    color, opacity, depth, n_sample = nerf.batch_forward(estimator, network, rays, 
+        batch_size=16*1024, render_bkgd=render_bkgd)
 
-    ray_indices, t_starts, t_ends = estimator.sampling(
-        rays_o, rays_d, 
-        sigma_fn=network.sigma_fn, 
-        stratified=network.training,
-    )
-
-    if len(t_starts) > 0:
-        color, opacity, depth, extras = network.rendering(
-            t_starts, t_ends, 
-            rays_o, rays_d, ray_indices,
-            render_bkgd=render_bkgd,
-        )
-
+    if n_sample > 0:
         loss = F.smooth_l1_loss(color, color_gt)
 
         optimizer.zero_grad()
@@ -66,11 +54,8 @@ def train_step(step, train_dataset, estimator, network, optimizer, device):
         grad_scaler.scale(loss).backward()
         optimizer.step()
         lr_scheduler.step()
-        # del color, opacity, depth, extras
     else:
         loss = 1.0 # log(1.0) == 0
-    # del data, ray_indices, t_starts, t_ends
-
     return loss
 
 
@@ -114,8 +99,10 @@ if __name__ == "__main__":
 
     # Step 2: get net
     estimator = nerf.GridEstimator(roi_aabb=aabb, resolution=128, levels=1).to(device)
-    estimator.train()
     network = nerf.RadianceField(aabb=estimator.aabbs[-1]).to(device)
+    nerf.load_model(estimator, network, args.checkpoint)
+
+    estimator.train()
     network.train()
     #
     # /************************************************************************************
@@ -139,7 +126,6 @@ if __name__ == "__main__":
             ),
         ]
     )
-    nerf.load_model(estimator, network, optimizer, args.checkpoint)
 
     pbar = tqdm(total=args.max_steps)
     pbar.set_description("trainning")
@@ -147,7 +133,7 @@ if __name__ == "__main__":
         pbar.update(1)
 
         last_lr = lr_scheduler.get_last_lr()[0]
-        last_loss = train_step(step, train_dataset, estimator, network, optimizer, device)
+        last_loss = train_step(step, train_dataset, estimator, network, optimizer)
 
         last_psnr = -10.0*math.log10(last_loss + 1e-5)
         pbar.set_postfix(loss="{:.6f}, psnr={:.3f}".format(last_loss, last_psnr))
@@ -163,8 +149,7 @@ if __name__ == "__main__":
         #
         # if step == (args.max_steps // 2) or (step == args.max_steps - 1):
         if (step == args.max_steps - 1):
-            nerf.save_model(estimator, network, optimizer, args.checkpoint)
-
+            nerf.save_model(estimator, network, last_psnr, args.checkpoint)
 
     todos.model.reset_device()
 

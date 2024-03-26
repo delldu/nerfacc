@@ -5,7 +5,6 @@ Copyright (c) 2022 Ruilong Li, UC Berkeley.
 import json
 import os
 
-import collections
 import imageio.v2 as imageio
 import numpy as np
 import torch
@@ -14,8 +13,9 @@ import torch.nn.functional as F
 import todos
 import pdb
 
-
-Rays = collections.namedtuple("Rays", ("origins", "viewdirs"))
+from nerf import Rays
+# import collections
+# Rays = collections.namedtuple("Rays", ("origins", "viewdirs"))
 
 
 def _load_renderings(root_fp: str, subject_id: str, split: str):
